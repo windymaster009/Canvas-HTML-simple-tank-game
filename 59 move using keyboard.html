@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border: 1px solid #d3d3d3;
+            background-color: #f1f1f1;
+        }
+    </style>
+</head>
+
+<body onload="startGame()">
+    <script>
+        var tankA;
+        var tankB;
+        var tankC; // New player tank
+        var bullets = []; // Array to store bullets
+        var bulletCooldown = 0; // Cooldown for shooting
+
+        function startGame() {
+
+            tankA = new component(30, 30, "tank.png", 100, 100, "./tank.png", 5); // Load Tank A image here
+            tankB = new component(30, 30, "tank.png", 225, 225, "./tank.png", 5); // Load Tank B image here
+            tankC = new component(30, 30, "tank.png", 350, 350, "./tank.png", 5); // Load Tank C image here
+
+            myGameArea.start();
+        }
+
+        var myGameArea = {
+            canvas: document.createElement("canvas"),
+            start: function () {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                this.context = this.canvas.getContext("2d");
+                document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+                this.frameNo = 0;
+                this.interval = setInterval(updateGameArea, 20);
+                window.addEventListener('keydown', function (e) {
+                    e.preventDefault();
+                    myGameArea.keys = (myGameArea.keys || []);
+                    myGameArea.keys[e.keyCode] = true;
+                })
+                window.addEventListener('keyup', function (e) {
+                    myGameArea.keys[e.keyCode] = false;
+                })
+            },
+            stop: function () {
+                clearInterval(this.interval);
+            },
+            clear: function () {
+                this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            }
+        }
+
+        function component(width, height, color, x, y, image, maxShots) { // Added maxShots parameter
+
+            this.type = "image"; // Set type to image
+            this.width = width;
+            this.height = height;
+            this.speed = 0;
+            this.angle = 0;
+            this.moveAngle = 0;
+            this.x = x;
+            this.y = y;
+            this.image = new Image(); // Create new image object
+            this.image.src = image; // Set the image source
+            this.shots = 0; // Number of shots fired
+            this.maxShots = maxShots; // Maximum shots before tank is killed
+            this.update = function () {
+                ctx = myGameArea.context;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.drawImage(this.image, this.width / -2, this.height / -2, this.width, this.height); // Draw image
+                ctx.restore();
+            }
+            this.newPos = function () {
+                this.angle += this.moveAngle * Math.PI / 180;
+                this.x += this.speed * Math.sin(this.angle);
+                this.y -= this.speed * Math.cos(this.angle);
+            }
+            this.resetShots = function () {
+                this.shots = 0; // Reset shots count
+            }
+            this.hitByBullet = function () {
+                this.shots++; // Increment shots count
+                if (this.shots >= this.maxShots) { // Check if tank is killed
+                    this.resetShots(); // Reset shots count
+                    // Respawn tank at a random position
+                    this.x = Math.floor(Math.random() * (myGameArea.canvas.width - this.width));
+                    this.y = Math.floor(Math.random() * (myGameArea.canvas.height - this.height));
+                }
+                playdeadSound();
+            }
+        }
+
+        function Bullet(x, y, angle, owner) { // Add owner parameter
+            this.x = x;
+            this.y = y;
+            this.speed = 3;
+            this.angle = angle;
+            this.width = 5;
+            this.height = 5;
+            this.owner = owner; // Store owner tank
+            this.update = function () {
+                ctx = myGameArea.context;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = "red";
+                ctx.fillRect(this.width / -2, this.height / -2, this.width, this.height);
+                ctx.restore();
+            }
+            this.newPos = function () {
+                this.x += this.speed * Math.sin(this.angle);
+                this.y -= this.speed * Math.cos(this.angle);
+            }
+        }
+
+        function updateGameArea() {
+            myGameArea.clear();
+            tankA.moveAngle = 0;
+            tankA.speed = 0;
+            tankB.moveAngle = 0;
+            tankB.speed = 0;
+            tankC.moveAngle = 0; // New player tank
+            tankC.speed = 0; // New player tank
+            // Tank A movement
+            if (myGameArea.keys && myGameArea.keys[65]) { tankA.moveAngle = -1; } // A key
+            if (myGameArea.keys && myGameArea.keys[68]) { tankA.moveAngle = 1; } // D key
+            if (myGameArea.keys && myGameArea.keys[87]) { tankA.speed = 1; } // W key
+            if (myGameArea.keys && myGameArea.keys[83]) { tankA.speed = -1; } // S key
+            // Tank B movement
+            if (myGameArea.keys && myGameArea.keys[37]) { tankB.moveAngle = -1; } // Left arrow
+            if (myGameArea.keys && myGameArea.keys[39]) { tankB.moveAngle = 1; } // Right arrow
+            if (myGameArea.keys && myGameArea.keys[38]) { tankB.speed = 1; } // Up arrow
+            if (myGameArea.keys && myGameArea.keys[40]) { tankB.speed = -1; }// Down arrow
+            // Tank C movement (New player tank)
+            if (myGameArea.keys && myGameArea.keys[74]) { tankC.moveAngle = -1; } // J key
+            if (myGameArea.keys && myGameArea.keys[76]) { tankC.moveAngle = 1; } // L key
+            if (myGameArea.keys && myGameArea.keys[73]) { tankC.speed = 1; } // I key
+            if (myGameArea.keys && myGameArea.keys[75]) { tankC.speed = -1; }// K key
+
+            // Shooting for tank A
+            if (myGameArea.keys && myGameArea.keys[32] && bulletCooldown <= 0) { // Spacebar
+                shootBullet(tankA);
+            }
+            // Shooting for tank B
+            if (myGameArea.keys && myGameArea.keys[13] && bulletCooldown <= 0) { // Enter key
+                shootBullet(tankB);
+            }
+            // Shooting for tank C (New player tank)
+            if (myGameArea.keys && myGameArea.keys[66] && bulletCooldown <= 0) { // B key
+                shootBullet(tankC);
+            }
+            // Update and draw bullets
+            for (var i = 0; i < bullets.length; i++) {
+                bullets[i].newPos();
+                bullets[i].update();
+                // Check if bullet hits tanks
+                if (bullets[i].owner !== tankA && checkBulletCollision(bullets[i], tankA)) {
+                    tankA.hitByBullet();
+                    bullets.splice(i, 1); // Remove bullet
+                    i--; // Decrement i to account for removed bullet
+                }
+                if (bullets[i].owner !== tankB && checkBulletCollision(bullets[i], tankB)) {
+                    tankB.hitByBullet();
+                    bullets.splice(i, 1); // Remove bullet
+                    i--; // Decrement i to account for removed bullet
+                }
+                if (bullets[i].owner !== tankC && checkBulletCollision(bullets[i], tankC)) {
+                    tankC.hitByBullet();
+                    bullets.splice(i, 1); // Remove bullet
+                    i--; // Decrement i to account for removed bullet
+                }
+            }
+            tankA.newPos();
+            tankA.update();
+            tankB.newPos();
+            tankB.update();
+            tankC.newPos(); // New player tank
+            tankC.update(); // New player tank
+            // Update cooldown
+            if (bulletCooldown > 0) {
+                bulletCooldown--;
+            }
+        }
+
+        function shootBullet(tank) {
+            bullets.push(new Bullet(tank.x, tank.y, tank.angle, tank)); // Pass tank as owner parameter
+            bulletCooldown = 20; // Set cooldown (20 frames)
+            playShootSound(); // Play shooting sound
+        }
+
+        function playShootSound() {
+            var audio = new Audio('shoota.wav'); // Specify the correct path to your sound file
+            audio.play();
+        }
+        function playdeadSound() {
+            var audio = new Audio('dead.mp3'); // Specify the correct path to your sound file
+            audio.play();
+        }
+
+        function checkBulletCollision(bullet, tank) {
+            var dx = bullet.x - tank.x;
+            var dy = bullet.y - tank.y;
+            var distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < tank.width / 2;
+        }
+    </script>
+</body>
+
+</html>
